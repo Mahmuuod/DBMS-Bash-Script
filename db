@@ -1,0 +1,661 @@
+#! /bin/bash
+<< COMMENT
+- Create Table
+- List Tables
+- Drop Table
+- Insert into Table
+- Select From Table
+- Delete From Table
+- Update Table
+COMMENT
+shopt -s extglob
+
+nullCheck()
+{
+	if [[ -z $1 ]] 
+	then
+	
+		echo null
+					if [[ -e ".meta$TBname" ]]
+					then
+						rm -f ".meta$TBname" 
+					fi
+		exit
+	
+	else
+		echo not null
+	fi
+	
+}
+
+existCheck()
+{
+	if [[ -e $1 ]]
+	then
+		echo exists
+		
+	else
+		echo "doesn't exist"
+		exit
+	fi
+}
+symbolCheck()
+{
+	if [[ $1 == *:* ]]
+	then
+		echo plz dont enter : symbol in the data
+					if [[ -e ".meta$TBname" ]]
+					then
+						rm -f ".meta$TBname" 
+					fi
+		exit
+	fi
+}
+
+
+checkstring()
+{
+	case $1 in
+	
+	+([a-zA-Z0-9]) )
+		return 1
+	;;
+	*)
+		return 0
+	esac
+}
+checkint()
+{
+	case $1 in
+	
+	+([0-9]) )
+		return 1
+	;;
+	*)
+		return 0
+	esac
+}
+createDB(){
+	read -p " enter your DB Name " DBname
+	nullCheck $DBname
+	if [[ -e $DBname ]]
+	then
+		echo " the DB exists "
+			
+	else
+		mkdir $DBname
+		echo "created database $DBname"
+	fi
+}
+
+insertdata(){
+	if [[ $1 == "int" ]]
+	then
+			checkint $2
+
+			returnVal=$?
+			if [[ $returnVal == '1' ]]
+			then
+				echo "right int"
+				line+=:$2
+			else
+				echo plz enter int value
+				line=''
+				exit
+			fi
+			
+	elif [[ $1 == "string" ]]
+	then
+		checkstring $2
+		returnVal=$?
+		if [[ $returnVal == '1' ]]
+		then
+			echo "right string"
+			line+=:$2
+		else
+			echo plz enter int value
+			line=''
+			exit
+		fi
+	else
+		echo " plz enter string ( a to z ) or interger (1 to 9) "
+		line=''
+		exit
+	fi
+}
+createTB(){
+	read -p " enter your TB Name " TBname
+	nullCheck $TBname
+	symbolCheck $TBname
+	if [[ -e $TBname || -e ".meta$TBname" ]]
+	then
+		echo " the TB exists "
+		exit
+			
+	else
+		read -p "plz enter the no. of cols : " nummm
+		nullCheck $nummm
+		symbolCheck $nummm
+		if [[ $nummm -gt 0 ]]
+		then
+			
+			flag=0
+			 
+			 for((i=1;i<=$nummm;i++))
+			 do
+				line=""
+			 	read -p "plz enter col name : " name
+			 	nullCheck $name
+				symbolCheck $name
+				
+				if [[ $name == $name2 ]]
+				then
+					echo dont repeat table names
+					rm -f ".meta$TBname"
+				exit
+				fi
+				name2=$name
+			 	line+=:$name
+			 	read -p "plz enter col DataType (int/string) : " type
+			 	nullCheck $type
+			 	line+=:$type
+
+			 	
+			 	
+			 	if [[ $type != 'int' && $type != 'string' ]] 
+				then
+					echo plz enter int or string 
+					if [[ -e ".meta$TBname" ]]
+					then
+						rm -f ".meta$TBname" 
+					fi
+					exit 	      #check that type = string or int
+				fi
+				
+				
+			 	if [[ flag -eq 0 ]]
+			 	then
+			 	read -p "you want this col to be a PK (Y/N) : " checkPK
+			 	nullCheck $checkPK
+				 	if [[ yes =~ $checkPK ]]
+					then
+						line+=:PK
+						flag=1
+					fi
+				fi
+				echo -e ${line:1} >> ".meta$TBname"			 	
+			 done
+		
+		else
+			echo " Wrong num of cols "
+			exit
+		fi
+		touch ".meta$TBname"
+		touch $TBname 
+		echo "$TBname Table created Successfully "
+		TBname=''
+	fi
+}
+
+insertIntoTb(){
+
+read -p "enter table name : " TB
+nullCheck $TB
+existCheck $TB
+	declare -a table=($(awk ' begin{} {print $0} end{} ' ".meta$TB") )
+	declare -i i=0
+	
+	
+	line=""
+	checkPK=""
+	for var in "${table[@]}"
+	do
+		
+		flag=0
+		field=$(echo $var | cut -f1 -d:)
+		type=$(echo $var | cut -f2 -d:)
+		PK=$(echo $var | cut -f3 -d:)
+		read -p "plz enter ${field} : " input
+		nullCheck $input
+		if [[ $input == *:* ]]
+		then
+			echo plz dont enter : symbol in the data
+			exit
+		fi
+
+		if [[ $PK == 'PK' ]]
+		then
+			echo "PK"
+			no=$(grep -n "PK" ".meta$TB" | cut -d: -f1)
+
+			declare -a col=($(awk -v no="$no" 'BEGIN {FS=":"} {print $no}' ./"$TB"))
+			declare -i checkPK=0
+			#echo ${col[@]}
+			for i in "${col[@]}"
+				do
+					if [[ $input -eq $i ]]
+					then
+						echo $i exists
+						exit
+					else
+						checkPK=1
+					fi
+					
+				done
+			if [[  $checkPK  ]]
+			then
+				insertdata $type $input
+			else
+			
+				echo 'primary key exists'
+				line=''
+				exit
+			fi
+		
+		else
+			insertdata $type $input
+		fi
+		
+		
+	done
+	line=${line:1}
+	echo -e $line >> $TB
+
+}
+Select()
+{
+read -p "enter table name " Stable
+nullCheck $Stable
+existCheck $Stable
+
+declare -a Tnames=($(awk ' BEGIN{FS=":"} {print $1} end{} ' ".meta$Stable") )
+echo ${Tnames[0]}
+echo "choose the col you want to select with: "
+#c=0
+	for i in ${Tnames[@]}
+	do
+	#c+=1
+	echo -n  "-$i 	"
+	done
+echo
+read -p "enter your selected col " Scol
+
+
+SF=0
+for i in ${Tnames[@]}
+do
+	if [[ $i == $Scol ]]
+	then
+		SF=1
+		break
+	else
+		SF=0
+	fi
+done
+if [[ -z $Scol ]] 
+then
+
+	declare -a Sdata=($(awk -v no="$Sno" -v val=$Sval 'BEGIN {FS=":"} 
+	{ print $0}' ./"$Stable"))
+	echo ----------------------
+	for i in ${Tnames[@]}
+	do
+	#c+=1
+	echo -n  "$i |"
+	done
+	echo
+	echo ----------------------
+	
+    for j in "${Sdata[@]}"
+     do
+     	IFS=':' read -ra array4 <<<"$j"
+        	for i in "${array4[@]}";
+        	do
+        		echo -n "$i |"
+        	done
+        	echo
+    done
+	echo ----------------------
+
+
+elif [[ SF -eq 1 ]]
+then
+	read -p "enter the value you want to search with  " Sval
+	nullCheck $Scol
+	Sno=$(grep -n "$Scol" .meta"$Stable" | cut -d: -f1)
+	declare -a Sdata=($(awk -v no="$Sno" -v val=$Sval 'BEGIN {FS=":"} 
+	{if($no==val) print $0}' ./"$Stable"))
+	echo ----------------------
+	for i in ${Tnames[@]}
+	do
+	#c+=1
+	echo -n  "$i |"
+	done
+	echo
+	echo ----------------------
+	
+    for j in "${Sdata[@]}"
+     do
+     	IFS=':' read -ra array4 <<<"$j"
+        	for i in "${array4[@]}";
+        	do
+        		echo -n "$i |"
+        	done
+        	echo
+    done
+	echo ----------------------
+
+else
+echo plz enter one of this
+	for i in ${Tnames[@]}
+	do
+	#c+=1
+	echo -n "		-$i"
+	done
+fi
+
+}
+update()
+{
+	read -p "enter table name " Utable
+	nullCheck $Utable
+	existCheck $Utable
+	declare -a fields=($(awk ' BEGIN{FS=":"} {print $1} end{} ' ".meta$Utable") )
+
+	for i in ${fields[@]}
+	do
+	#c+=1
+	echo -n  "-$i 	"
+	done
+	echo
+	read -p "enter your col you want to select with:  " Scol
+	nullCheck $Scol
+	read -p "enter the col you want to update:  " Ucol
+	nullCheck $Ucol
+	Uno=$(grep -n "$Ucol" .meta"$Utable" | cut -d: -f1)
+	read -p "enter the value you want to select with:  " Sval
+	nullCheck $Sval
+	read -p "enter the value you want to set col $Ucol to " Uval
+	nullCheck $Uval
+	if [[ $Uval == *:* ]]
+	then
+		echo plz dont enter : symbol in the data
+		exit
+	fi
+	Sno=$(grep -n "$Scol" .meta"$Utable" | cut -d: -f1)
+	
+	Tname=$(grep  "$Ucol" .meta"$Utable" )
+	#echo $Tname
+		Ufield=$(echo $Tname | cut -f1 -d:)
+		Utype=$(echo $Tname | cut -f2 -d:)
+		UPK=$(echo $Tname | cut -f3 -d:)
+		if [[ $Utype == 'int' ]] 
+		then
+			checkint $Uval
+			returnval=$?
+		elif [[ $Utype == 'string' ]] 
+		then
+			checkstring $Uval
+			returnval=$?
+		else
+			echo plz enter int or string
+			returnval=0
+		fi
+		UF=0
+		UF2=0
+		for i in ${fields[@]}
+		do
+			if [[ $i == $Scol ]]
+			then
+				UF=1
+				break
+			else
+				UF=0
+			fi
+		done
+		for i in ${fields[@]}
+		do
+			if [[ $i == $Ucol ]]
+			then
+				UF2=1
+				break
+			else
+				UF2=0
+			fi
+		done
+	#echo $returnval
+	if [[ $returnval -eq 1 ]]	
+	then	
+		if [[ $Uval == *:* ]]
+		then
+			echo plz dont enter : symbol in the data
+			exit
+		fi
+
+		if [[ $UPK == 'PK' ]]
+		then
+			#echo "PK"
+			#no=$(grep -n "PK" .metast | cut -d: -f1)
+			declare -a Rnames=$(grep  "$Uval" "$Utable" ) #modfied recordsc
+			declare -i c=0
+			for i in Rnames 
+			do
+				c+=1
+			done
+			if [[ c -gt 1 ]]
+			then
+				echo duplicate pk
+				exit
+			fi
+			declare -a col=($(awk -v no="$Uno" 'BEGIN {FS=":"} {print $no}' ./"$Utable"))
+			declare -i checkPK=0
+			#echo ${col[@]}
+			for i in "${col[@]}"
+			do
+					if [[ $Uval -eq $i ]]
+					then
+						echo $i exists
+						exit
+					else
+						checkPK=1
+					fi
+					
+			done
+		
+			#echo $checkPK
+			if [[  $checkPK  ]]
+			then
+			if [[ $UF -eq 1 && $UF2 -eq 1 ]]
+			then
+				#declare -a Udata=
+				(awk -v Sno="$Sno" -v Uno="$Uno" -v Sval="$Sval" -v Uval="$Uval" 'BEGIN {FS=":" ; OFS=":"} {if ($Sno == Sval) {$Uno = Uval; }print $0}' ./"$Utable") > tmpfile && mv tmpfile ./"$Utable"
+			echo "data updated"
+			else
+			echo plz enter one of this
+				for i in ${fields[@]}
+				do
+				#c+=1
+				echo  "		-$i"
+				done
+			fi
+			else
+			
+				echo 'primary key exists'
+				line=''
+				exit
+			fi
+		
+		else
+			UF=0
+			if [[ $UF -eq 1 && $UF2 -eq 1 ]]
+			then
+				#declare -a Udata=
+				(awk -v Sno="$Sno" -v Uno="$Uno" -v Sval="$Sval" -v Uval="$Uval" 'BEGIN {FS=":" ; OFS=":"} {if ($Sno == Sval) {$Uno = Uval; }print $0}' ./"$Utable") > tmpfile && mv tmpfile ./"$Utable"
+			echo "data updated"
+			
+			else
+			echo plz enter one of this
+				for i in ${fields[@]}
+				do
+				#c+=1
+				echo  "		-$i"
+				done
+			fi
+		fi
+	else
+		echo plz enter proper values  
+	fi
+
+
+
+}
+delete()
+{
+	read -p "enter table name " Dtable
+	nullCheck $Dtable
+	existCheck $Dtable
+
+
+	declare -a Tnames=($(awk ' BEGIN{FS=":"} {print $1} end{} ' ".meta$Dtable") )
+
+		for i in ${Tnames[@]}
+		do
+		#c+=1
+		echo -n  "-$i 	"
+		done
+	echo
+	read -p "enter your selected col " Dcol
+	nullCheck $Dcol
+	Dno=$(grep -n "$Dcol" .meta"$Dtable" | cut -d: -f1)
+	echo $Dno
+	read -p "enter the value you want to delete its record " Dval
+	nullCheck $Dval
+	UF=0
+	for i in ${Tnames[@]}
+	do
+		if [[ $i == $Dcol ]]
+		then
+			UF=1
+			break
+		else
+			UF=0
+		fi
+	done
+	if [[ $UF -eq 1 ]]
+	then
+		#declare -a Udata= 
+		(awk  -v Dno="$Dno" -v Dval="$Dval" 'BEGIN {FS=":" ; OFS=":"} {if(!($Dno == Dval)) print $0 }' ./"$Dtable") > tmpfile && mv tmpfile ./"$Dtable"
+		#echo ${Udata[@]}
+	echo "data updated"
+	else
+	echo plz enter one of this
+		for i in ${Tnames[@]}
+		do
+		#c+=1
+		echo  "		-$i"
+		done
+	fi
+
+}
+ConnectDbs()
+{
+	read -p " enter your DB Name " DBname
+	nullCheck $DBname
+	if [[ -e $DBname ]]
+	then
+		cd $DBname
+		echo " You Are Connected to $DBname database "
+	else
+	echo "database isn't exists"
+	 exit
+	fi	
+select option in CreateTb ListTbs DropTb insertIntoTb SelectFromTb DeleteFromTb UpdateTb exit
+
+do
+	case $option in
+	"CreateTb")
+		createTB
+	;;
+	"ListTbs")
+		ls
+	;;
+	"DropTb")
+		read -p " enter your table Name " DTBname
+		nullCheck $DTBname
+		existCheck ".meta"$DTBname
+		rm -fr $DTBname ".meta$DTBname"
+		echo "table $DTBname has been deleted ."
+	;;
+	"insertIntoTb")
+		insertIntoTb
+	;;
+	"SelectFromTb")
+	Select
+	;;
+	"DeleteFromTb")
+	delete
+	;;
+	"UpdateTb")
+	update
+	;;
+	"exit")
+	break
+	;;
+	*)
+		echo " plz choose from 1 to 8 "
+	esac
+
+done
+		
+			
+
+}
+dropDB(){
+	read -p " enter your DB Name " DBname
+	nullCheck $DBname
+	if [[ -e $DBname ]]
+	then
+		rm -rf $DBname
+		echo " Database $DBname Dropped "
+			
+	else
+		echo "database isn't exists"
+	fi
+}
+
+
+if [ -e ./Database ]
+then
+	cd ./Database
+	echo "dbms is ready"
+else
+	mkdir ./Database/
+	cd ./Database/
+	echo "dbms is ready"
+fi
+
+select option in CreateDb ListDbs ConnectDbs DropDb exit
+do
+	case $option in
+		"CreateDb")
+			createDB
+		;;
+		"ListDbs" )
+			ls 
+		;;
+		"ConnectDbs")
+			ConnectDbs
+		;;
+		"DropDb")
+			dropDB
+		;;
+		"exit")
+					break
+		;;
+		*)
+			echo " plz choose from 1 to 5 "
+		
+	esac
+
+done
+
